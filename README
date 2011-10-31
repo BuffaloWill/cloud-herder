@@ -1,0 +1,147 @@
+The cloud_herder plugin is meant to interface MSF with the Ruby fog gem (https://github.com/geemus/fog). It's primary goal is to allow the user to create instances in multiple cloud providers and use those instances through Metasploit.
+
+---- TO USE -----
+
+Copy:
+
+ fog.example.yml to MSF_ROOT/data/
+ cloud_herder.rb to MSF_ROOT/plugins/
+ instance.rb to MSF_ROOT/lib/lab/
+ pwcrack.rb to MSF_ROOT/lib/lab/
+ fog_driver.rb to MSF_ROOT/lib/lab/driver/
+
+----- Fog.yml -----
+
+Before you begin, you will need to have accounts set-up on the cloud providers you will be using. The relevant creds should then be added into your fog.yml config file (place this in MSF_ROOT/data/) with the name 'global'. For example, the following are for Amazon AWS:
+
+- name: global
+  fog_type: ec2
+  fog_aws_cert_file: /home/user/AWS/cert-XXXX.pem
+  fog_aws_private_key_file: /home/user/AWS/pk-XXX.pem
+  fog_ec2_access_key: YYYYY
+  fog_ec2_secret_access_key: ZZZZZ
+  
+That's it =). But to do anything useful you will want to pick out some images to use. These also need to be placed in the fog.yml like so:
+
+- name: micro
+  fog_type: ec2
+  fog_ec2_base_ami: ami-ab36fbc2
+  fog_ec2_flavor: t1.micro
+  fog_ec2_key_name: ec2-keypair
+  fog_user: ubuntu
+  fog_instance_private_key_file: /home/user/AWS/XXXX.pem
+
+As of right now the only fog_types that can be used are ec2 and local. A local instance is a system that is already on (e.g. a VM) that you would like to add to the herd.
+
+- name: lab
+  fog_type: local
+  fog_user: user
+  fog_instance_private_key_file: /home/user/AWS/XXXXX.pem
+  
+----- Starting An Instance ----- 
+
+To start an instance run:
+
+ch_start micro
+
+The instance "type" must align with the name field in the fog.yml file. In this, case I have started a micro instance. 
+
+
+----- Running commands ----- 
+
+To run a command on an instance:
+
+ch_run instance_0 'ls -l'
+
+The instance nicknames (e.g. instance_0) can be found by running ch_list. You can also give a new nickname to an instance. As of right now the IP address can't be used. You pull up currently running instances via ch_load.
+
+
+----- Object Commands ----- 
+
+An instance can also have an object type. An object type for an instance should have two goals. One, it should abstract the commands the user can perform with the instance in the cloud. For example, if I have created a scanner object type then I can set one of my commands the user inputs as 'vuln_scan' and implement it in any number of ways in the object type itself. The actual cloud instance doesn't care as it just recieves the raw commands to perform and respond with. Two, complex actions (e.g. interfacing with the MSF database) can be placed inside the object type and abstracted from the plug-in. For example, a user could create a password cracking object type. When the 'crack' command is received it could pull all looted pws and send to the cloud instances for cracking.
+
+Object types are partially implemented now; the actual design needs love though it works. IMO it was too tightly coupled with actual SSH commands requiring complex actions to be boiled down too much.
+
+----- TODO ----- 
+
+1. AWS is the only cloud supported.  
+2. A proper middleware is needed. That is, the herder needs to handle task assignment to different instances rather than having the user point out an instance. Also need to define the idea of a job versus a command. A job may run for a /long/ time with periodic updates whereas a command may be short. 
+3. There is no feedback for object commands, the command is sent to the instance and then the user has to hunt down the response.
+4. There are very few error responses if a user messes something up.
+5. Objects should dump command descriptions.
+6. Object commands should be able to be run in groups. 
+7. Sending arguments around is such a hack, need a better way to do this (e.g. for obj cmds, etc.)
+
+----- Proof of Concept ----- 
+
+%^%>sudo ./msfconsole -L
+
+       =[ metasploit v4.1.2-dev [core:4.1 api:1.0]
++ -- --=[ 754 exploits - 395 auxiliary - 109 post
++ -- --=[ 228 payloads - 27 encoders - 8 nops
+       =[ svn r14123 updated today (2011.10.30)
+
+msf > load cloud_herder 
+
+        _  _                 _ .  
+       ( `   )_            (  _ )_   
+      (    )    `)        (_  _(_ ,)
+    (_   (_ .  _) _)   _	
+                      ( _)       Come on lil doggie.
+                      
+Using configuration file: /home/msf/data/fog.yml
+[+] Succesfully loaded /home/msf/data/fog.yml
+[*] Successfully loaded plugin: CloudHerder
+
+msf > ch_start micro
+Starting instance micro, blocking this thread until it's ready...
+[+] Server micro with 50.17.138.168 created and added to herd.
+msf > ch_list
+NAME                     IP                      GROUP                TYPE
+
+instance_0             XX.XX.XX.XX            micro              Instance
+ 
+msf > ch_load
+[+] Added 3 already running instances.
+msf > ch_list
+NAME                     IP                      GROUP                TYPE
+
+instance_3             XX.XX.XX.XX             instance              Instance
+instance_0             XX.XX.XX.XX             micro              Instance
+instance_1             XX.XX.XX.XX             instance              Instance
+instance_2             XX.XX.XX.XX             instance              Instance
+ 
+msf > ch_set_obj instance_0 Pwcrack
+
+msf > ch_run instance_0 'ls -la'
+Running ls -la on instance_0 - XX.XX.XX.XX   Group:micro 	 	 Mon Oct 31 03:38:10 -0400 2011
+total 28
+drwxr-xr-x 4 ubuntu ubuntu 4096 2011-10-31 07:38 .
+drwxr-xr-x 3 root   root   4096 2011-09-30 07:10 ..
+-rw-r--r-- 1 ubuntu ubuntu  220 2011-09-30 07:10 .bash_logout
+-rw-r--r-- 1 ubuntu ubuntu 3103 2011-09-30 07:10 .bashrc
+drwx------ 2 ubuntu ubuntu 4096 2011-10-31 07:38 .cache
+-rw-r--r-- 1 ubuntu ubuntu  675 2011-09-30 07:10 .profile
+drwx------ 2 ubuntu ubuntu 4096 2011-10-31 07:36 .ssh
+Closing the connection to XX.XX.XX.XX..
+ 
+msf > ch_run_obj instance_0 crack
+Sending passwords to remote instance for cracking..
+echo 'cred_4:4:aaasdas5b51404bbccaa3123121404ee:b44cd6ee8caasdasdasdasdb5asdasd3:::
+cred_3:3:a37asdasdasdasdasdb364ae939b5:1123as611be738asdasdasdasdasddad1bb:::
+cred_2:2:aad3b4asdasdasdasdasdb435b51404ee:31d6cfsdasdasdasdasdasdasd089c0:::
+cred_1:1:1443d06412asdasdasdef50f76a05:27qwe1235e47asdasdasdasd0af2c:::' >> passwords.txt;
+msf > ch_run instance_0 'ls -la'
+Running ls -la on instance_0 - XX.XX.XX.XX   Group:micro 	 	 Mon Oct 31 03:38:32 -0400 2011
+total 32
+drwxr-xr-x 4 ubuntu ubuntu 4096 2011-10-31 07:38 .
+drwxr-xr-x 3 root   root   4096 2011-09-30 07:10 ..
+-rw-r--r-- 1 ubuntu ubuntu  220 2011-09-30 07:10 .bash_logout
+-rw-r--r-- 1 ubuntu ubuntu 3103 2011-09-30 07:10 .bashrc
+drwx------ 2 ubuntu ubuntu 4096 2011-10-31 07:38 .cache
+-rw-r--r-- 1 ubuntu ubuntu  312 2011-10-31 07:38 passwords.txt
+-rw-r--r-- 1 ubuntu ubuntu  675 2011-09-30 07:10 .profile
+drwx------ 2 ubuntu ubuntu 4096 2011-10-31 07:36 .ssh
+Closing the connection to XX.XX.XX.XX..
+ 
+

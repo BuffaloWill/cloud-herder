@@ -1,0 +1,20 @@
+- name: global
+  fog_type: ec2
+  fog_aws_cert_file: /home/user/AWS/cert-XXX.pem
+  fog_aws_private_key_file: /home/user/AWS/pk-XXX.pem
+  fog_ec2_access_key: XXXX
+  fog_ec2_secret_access_key: XXXX
+
+- name: micro
+  fog_type: ec2
+  fog_ec2_base_ami: ami-ab36fbc2
+  fog_ec2_flavor: t1.micro
+  fog_ec2_key_name: ec2-keypair
+  fog_user: ubuntu
+  fog_instance_private_key_file: /home/user/AWS/ec2--keypair.pem
+
+- name: lab
+  fog_type: local
+  fog_user: user
+  fog_instance_private_key_file: /home/user/AWS/ec2--keypair.pem
+  
