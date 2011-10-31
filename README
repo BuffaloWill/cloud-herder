@@ -95,7 +95,7 @@ Using configuration file: /home/msf/data/fog.yml
 
 msf > ch_start micro
 Starting instance micro, blocking this thread until it's ready...
-[+] Server micro with 50.17.138.168 created and added to herd.
+[+] Server micro with XXX.XX.XX.XX created and added to herd.
 msf > ch_list
 NAME                     IP                      GROUP                TYPE
 
