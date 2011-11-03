@@ -21,6 +21,13 @@ Before you begin, you will need to have accounts set-up on the cloud providers y
   fog_ec2_access_key: YYYYY
   fog_ec2_secret_access_key: ZZZZZ
   
+Rackspace:
+
+- name: global
+  fog_type: rackspace
+  fog_rackspace_api_key: ZZZZZZZ
+  fog_rackspace_username: XXXXXXX
+  
 That's it =). But to do anything useful you will want to pick out some images to use. These also need to be placed in the fog.yml like so:
 
 - name: micro
@@ -30,6 +37,12 @@ That's it =). But to do anything useful you will want to pick out some images to
   fog_ec2_key_name: ec2-keypair
   fog_user: ubuntu
   fog_instance_private_key_file: /home/user/AWS/XXXX.pem
+
+- name: small_rackspace
+  fog_type: rackspace
+  fog_rackspace_flavor: 1
+  fog_rackspace_image_id: 49
+  fog_user: root
 
 As of right now the only fog_types that can be used are ec2 and local. A local instance is a system that is already on (e.g. a VM) that you would like to add to the herd.
 
@@ -42,7 +55,7 @@ As of right now the only fog_types that can be used are ec2 and local. A local i
 
 To start an instance run:
 
-ch_start micro
+ch_start micro ec2
 
 The instance "type" must align with the name field in the fog.yml file. In this, case I have started a micro instance. 
 
@@ -64,7 +77,7 @@ Object types are partially implemented now; the actual design needs love though 
 
 ----- TODO ----- 
 
-1. AWS is the only cloud supported.  
+1. AWS and rackspace are the only cloud supported.  
 2. A proper middleware is needed. That is, the herder needs to handle task assignment to different instances rather than having the user point out an instance. Also need to define the idea of a job versus a command. A job may run for a /long/ time with periodic updates whereas a command may be short. 
 3. There is no feedback for object commands, the command is sent to the instance and then the user has to hunt down the response.
 4. There are very few error responses if a user messes something up.
@@ -93,7 +106,7 @@ Using configuration file: /home/msf/data/fog.yml
 [+] Succesfully loaded /home/msf/data/fog.yml
 [*] Successfully loaded plugin: CloudHerder
 
-msf > ch_start micro
+msf > ch_start micro ec2
 Starting instance micro, blocking this thread until it's ready...
 [+] Server micro with XXX.XX.XX.XX created and added to herd.
 msf > ch_list
