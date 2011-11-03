@@ -39,7 +39,7 @@ class Plugin::Fog < Msf::Plugin
 		    "ch_help" => "Halllp!",
 		    "ch_fog" => "Initialize fog with configuration file. Usage: ch_fog [config.yml]",
 		    "ch_load" => "Load currently running instances from cloud server.",
-		    "ch_start" => "Start an instance. Usage: ch_start [instance_name]",
+		    "ch_start" => "Start an instance. Usage: ch_start [instance_name] [provider]",
 		    "ch_start_n" => "Start n instances. Usage: ch_start [n] [instance_name]",
 		    "ch_run" => "Run a command. Usage: ch_run [instance_name] [command]",
 		    "ch_run_all" => "Run a command on all. Usage: ch_run_all [command]",
@@ -82,8 +82,7 @@ class Plugin::Fog < Msf::Plugin
 			print_good "Succesfully loaded #{args[0]}"
 		end
 		
-		def cmd_ch_load(*args)
-			
+		def cmd_ch_load(*args)			
 			clouds = @master.running
 			temp = []
 			adding = 0
@@ -93,7 +92,7 @@ class Plugin::Fog < Msf::Plugin
 				temp.push(cloud)
 			end
 			
-			unless temp[0].public_ip_address
+			unless temp[0]
 				print_error "No running instances found." 
 				return
 			end
@@ -104,7 +103,22 @@ class Plugin::Fog < Msf::Plugin
 				inst = ::Lab::Instance.new(@ittr)
 				
 				inst.server = bot
-				inst.ip = bot.public_ip_address
+				
+				if bot.kind_of? Fog::Compute::Rackspace::Servers or bot.kind_of? Fog::Compute::AWS::Servers				
+					bot.each do |server|
+						if server.kind_of? Fog::Compute::Rackspace::Server
+							inst.ip = server.addresses["public"]
+						else
+							inst.ip = server.public_ip_address	
+						end
+					end
+				else
+					if bot.kind_of? Fog::Compute::Rackspace::Server
+						inst.ip = bot.addresses
+					else
+						inst.ip = bot.public_ip_address	
+					end
+				end
 				
 				@bots.each do |key,value|
 					exists = true if value.ip == inst.ip
@@ -126,13 +140,15 @@ class Plugin::Fog < Msf::Plugin
 		end
 		
 		def cmd_ch_start(*args)
+			return cmd_ch_help unless args.count == 2
+
 			if args[0] == "local"
 				print_error "Local instances cannot be started, start the instance and import it."
 				return 
 			end
 
 			#provide the instance to start
-			server = @master.start(args[0])
+			server = @master.start(args[0], args[1])
 			
 			if server
 				inst = ::Lab::Instance.new(@ittr)
@@ -172,7 +188,11 @@ class Plugin::Fog < Msf::Plugin
 			print_line "Running #{args[1]} on #{args[0]} - #{ip}   Group:#{@bots[args[0]].group} \t \t #{Time.new}"
 			
 			#run the command via the driver
-			@master.run_command(@bots["#{args[0]}"].base_name, ip, args[1])
+			if @bots["#{args[0]}"].fog_type == "rackspace"
+				@master.run_command(@bots["#{args[0]}"].base_name, ip, args[1], @bots["#{args[0]}"].server.password)	
+			else
+				@master.run_command_pk(@bots["#{args[0]}"].base_name, ip, args[1])
+			end
 			print_line " "
 		end
 		
@@ -190,13 +210,12 @@ class Plugin::Fog < Msf::Plugin
 				return
 			end
 
-			if obj_cmd.ssh	
-				info = @master.run_command_obj(bot.base_name, bot.ip, obj_cmd.cmd)
+			cmd = obj_cmd.ssh ? obj_cmd.ssh : bot.send("#{obj_cmd.cmd}")
+	
+			if @bots["#{args[0]}"].fog_type == "rackspace"
+				@master.run_command_obj(@bots["#{args[0]}"].base_name, ip, cmd, @bots["#{args[0]}"].server.password)	
 			else
-				#there has to be a better way to do this
-				cmd = bot.send("#{obj_cmd.cmd}")
-				puts cmd
-				info = @master.run_command_obj(bot.base_name, bot.ip, cmd)
+				@master.run_command_obj_pk(@bots["#{args[0]}"].base_name, ip, cmd)
 			end
 			
 			if info[1]
